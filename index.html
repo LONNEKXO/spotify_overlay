@@ -9,14 +9,14 @@
     html,body{height:100%}
     body{
       margin:0;
-      background: transparent; /* <-- STRONA PRZEZROCZYSTA */
+      background: transparent; /* STRONA PRZEZROCZYSTA */
       overflow:hidden;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color:#e9ecff;
     }
 
     :root{
-      --card-bg: rgba(12,14,30,.88);   /* <-- widget NIE jest przezroczysty */
+      --card-bg: rgba(12,14,30,.88);   /* widget NIE jest przezroczysty */
       --stroke: rgba(97,103,170,.35);
       --pink:#ff5aa6;
       --mauve:#b06cff;
@@ -29,7 +29,15 @@
       left:42px;
       bottom:42px;
       z-index:10;
-      /* szerokość będzie ustawiana JS-em (dynamicznie) */
+      transition: opacity .35s ease, transform .35s ease;
+      opacity: 0;
+      transform: translateY(10px) scale(.98);
+      pointer-events:none;
+    }
+    .wrap.visible{
+      opacity:1;
+      transform: translateY(0) scale(1);
+      pointer-events:auto;
     }
 
     .card{
@@ -108,19 +116,19 @@
       border:1px solid rgba(255,255,255,.08);
       opacity:.8;
     }
-    .spin{
-      animation: spin 2.2s linear infinite;
-    }
+    .spin{ animation: spin 2.2s linear infinite; }
     @keyframes spin{ to{ transform: rotate(360deg); } }
 
     .meta{
       min-width:0;
       display:flex;
       flex-direction:column;
-      gap:2px;
+      gap:4px;
       z-index:1;
       position:relative;
     }
+
+    /* UWAGA: nie ucinasz “na siłę”; karta rośnie, a dopiero jak dojdzie do max szerokości okna to da ellipsis */
     .artist{
       font-size:13px;
       font-weight:900;
@@ -130,7 +138,6 @@
       overflow:hidden;
       text-overflow:ellipsis;
       text-shadow:0 0 14px rgba(176,108,255,.35);
-      max-width: 62vw; /* fallback */
     }
     .track{
       font-size:12px;
@@ -142,34 +149,48 @@
       text-overflow:ellipsis;
       color:#ffe6f6;
       text-shadow:0 0 14px rgba(255,90,166,.30);
-      max-width: 62vw; /* fallback */
     }
 
-    .pill{
-      margin-left:10px;
-      font-size:10px;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,90,166,.55);
-      background: radial-gradient(circle at 0 0,
-        rgba(255,90,166,.22),
-        rgba(176,108,255,.12)
-      );
-      color:#ffe6f6;
-      text-transform:uppercase;
-      letter-spacing:.16em;
-      font-weight:900;
+    /* progress row */
+    .progressRow{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-top:2px;
+    }
+
+    .time{
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.08em;
+      opacity:.78;
+      color:#b8c0ff;
+      width:48px;
+      text-align:center;
+      flex:0 0 auto;
       user-select:none;
-      z-index:1;
-      position:relative;
-      white-space:nowrap;
     }
 
-    /* idle */
-    .idle .artist{ opacity:.75; }
-    .idle .track{ opacity:.6; }
-    .idle .vinyl{ opacity:.65; }
-    .idle .cover{ opacity:.65; }
+    .bar{
+      position:relative;
+      height:8px;
+      flex:1 1 auto;
+      min-width:120px;
+      border-radius:999px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      box-shadow: inset 0 0 18px rgba(0,0,0,.35);
+    }
+
+    .barFill{
+      height:100%;
+      width:0%;
+      border-radius:999px;
+      background: linear-gradient(90deg, rgba(255,90,166,.95), rgba(176,108,255,.85));
+      box-shadow: 0 0 18px rgba(255,90,166,.25);
+      transition: width .15s linear;
+    }
 
     /* responsive */
     @media (max-width:780px){
@@ -180,8 +201,8 @@
 </head>
 
 <body>
-  <div class="wrap">
-    <div id="card" class="card idle">
+  <div class="wrap" id="wrap">
+    <div id="card" class="card">
       <div class="vinyl" id="vinyl"></div>
       <div class="cover">
         <img id="coverImg" alt="Okładka utworu" />
@@ -190,9 +211,13 @@
       <div class="meta">
         <div id="artist" class="artist">Spotify</div>
         <div id="track" class="track">Łączenie…</div>
-      </div>
 
-      <div id="pill" class="pill">OFF</div>
+        <div class="progressRow">
+          <div id="tLeft" class="time">0:00</div>
+          <div class="bar"><div id="barFill" class="barFill"></div></div>
+          <div id="tRight" class="time">0:00</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -201,8 +226,7 @@
      * USTAW:
      **********************/
     const SPOTIFY_CLIENT_ID = "0ed7689f271f4ba0afde04674e676e71";
-    // MUSI BYĆ identyczne jak Redirect URI w Spotify Developer
-    const REDIRECT_URI = "https://lonnekxo.github.io/spotify_overlay/";
+    const REDIRECT_URI = "https://lonnekxo.github.io/spotify_overlay/"; // 1:1 jak w Spotify Dev
     const SCOPES = [
       "user-read-currently-playing",
       "user-read-playback-state"
@@ -211,36 +235,60 @@
     /**********************
      * UI
      **********************/
+    const wrap = document.getElementById("wrap");
     const card = document.getElementById("card");
     const vinyl = document.getElementById("vinyl");
     const coverImg = document.getElementById("coverImg");
     const artistEl = document.getElementById("artist");
     const trackEl = document.getElementById("track");
-    const pill = document.getElementById("pill");
+    const tLeft = document.getElementById("tLeft");
+    const tRight = document.getElementById("tRight");
+    const barFill = document.getElementById("barFill");
 
-    function setIdle(a, t){
-      card.classList.add("idle");
-      pill.textContent = "OFF";
-      vinyl.classList.remove("spin");
-      artistEl.textContent = a ?? "Nic nie gra";
-      trackEl.textContent = t ?? "—";
-      coverImg.removeAttribute("src");
-      resizeCardToText();
+    function showHUD(){ wrap.classList.add("visible"); }
+    function hideHUD(){ wrap.classList.remove("visible"); }
+
+    function formatTime(ms){
+      const s = Math.max(0, Math.floor(ms / 1000));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${m}:${String(r).padStart(2,"0")}`;
     }
 
-    function setPlaying({artist, track, imageUrl}){
-      card.classList.remove("idle");
-      pill.textContent = "ON";
+    function setIdle(){
+      // Jak nic nie gra -> HUD znika
+      hideHUD();
+      vinyl.classList.remove("spin");
+      coverImg.removeAttribute("src");
+      artistEl.textContent = "—";
+      trackEl.textContent = "—";
+      tLeft.textContent = "0:00";
+      tRight.textContent = "0:00";
+      barFill.style.width = "0%";
+      resizeCardToText(); // żeby po powrocie nie było glitchy
+    }
+
+    function setPlaying({artist, track, imageUrl, progressMs, durationMs}){
+      // Jak gra -> HUD się pokazuje
+      showHUD();
       vinyl.classList.add("spin");
       artistEl.textContent = artist || "—";
       trackEl.textContent = track || "—";
       if (imageUrl) coverImg.src = imageUrl;
+
+      // timery
+      tLeft.textContent = formatTime(progressMs);
+      tRight.textContent = formatTime(durationMs);
+
+      // bar
+      const pct = durationMs ? Math.max(0, Math.min(1, progressMs / durationMs)) : 0;
+      barFill.style.width = (pct * 100).toFixed(2) + "%";
+
       resizeCardToText();
     }
 
     /**********************
-     * Auto-resize szerokości karty pod tekst
-     * (żeby overlay się “rozszerzał i zwężał”)
+     * Auto-resize szerokości karty pod tekst + progress row
      **********************/
     const measureCanvas = document.createElement("canvas");
     const mctx = measureCanvas.getContext("2d");
@@ -251,7 +299,6 @@
     }
 
     function resizeCardToText(){
-      // pobieramy aktualne fonty z DOM, żeby pomiar był realny
       const artistStyle = getComputedStyle(artistEl);
       const trackStyle = getComputedStyle(trackEl);
 
@@ -262,13 +309,13 @@
       const wT = textWidth(trackEl.textContent || "", trackFont);
       const textW = Math.max(wA, wT);
 
-      // stałe elementy: vinyl + cover + padding + pill + gaps
-      // to jest “na oko” + margines, żeby nie ucinało
-      const fixed = 54 + 54 + 14*2 + 12*3 + 10 + 56; // ~ vin/cover/padding/gaps/pill
-      const target = fixed + textW;
+      // fixed: vinyl + cover + padding + gaps + progress row (czas + czas + minimalny bar)
+      const fixedLeft = 54 + 54 + 14*2 + 12*3; // vin + cover + padding + gaps
+      const progressMin = 48 + 10 + 120 + 10 + 48; // left time + gap + min bar + gap + right time
+      const target = fixedLeft + Math.max(textW, progressMin);
 
-      const minW = 320;
-      const maxW = Math.min(window.innerWidth - 84, 900);
+      const minW = 420;
+      const maxW = Math.min(window.innerWidth - 60, 1200); // rośnie szerzej niż wcześniej
 
       const finalW = Math.max(minW, Math.min(maxW, Math.round(target)));
       card.style.width = finalW + "px";
@@ -336,14 +383,6 @@
     }
 
     async function startLoginAuto(){
-      // “automatyczny connect”:
-      // jeżeli nie mamy tokenów, robimy redirect do Spotify od razu.
-      // (pierwszy raz i tak musisz zaakceptować zgodę w Spotify)
-      if (!SPOTIFY_CLIENT_ID || SPOTIFY_CLIENT_ID.includes("WSTAW_TU")) {
-        setIdle("Brak Client ID", "Wklej SPOTIFY_CLIENT_ID");
-        return;
-      }
-
       const code_verifier = randomString(64);
       localStorage.setItem("sp_code_verifier", code_verifier);
       const challenge = base64UrlEncode(await sha256(code_verifier));
@@ -366,14 +405,15 @@
       const error = url.searchParams.get("error");
 
       if (error){
-        setIdle("Błąd Spotify", error);
+        // jak błąd, HUD chowamy
+        setIdle();
         return;
       }
       if (!code) return;
 
       const code_verifier = localStorage.getItem("sp_code_verifier");
       if (!code_verifier){
-        setIdle("Brak PKCE", "Wyczyść localStorage i odśwież");
+        setIdle();
         return;
       }
 
@@ -392,14 +432,13 @@
       });
 
       if (!res.ok){
-        setIdle("Token exchange fail", "Sprawdź Redirect URI");
+        setIdle();
         return;
       }
 
       const data = await res.json();
       saveTokens(data);
 
-      // sprzątamy URL
       url.searchParams.delete("code");
       url.searchParams.delete("state");
       window.history.replaceState({}, document.title, url.toString());
@@ -424,7 +463,9 @@
         isPlaying:true,
         artist: (item.artists || []).map(a=>a.name).join(", "),
         track: item.name || "—",
-        imageUrl: item.album?.images?.[0]?.url || ""
+        imageUrl: item.album?.images?.[0]?.url || "",
+        progressMs: data.progress_ms ?? 0,
+        durationMs: item.duration_ms ?? 0
       };
     }
 
@@ -437,46 +478,79 @@
       return token;
     }
 
+    /**********************
+     * Smooth timer (lokalny) + polling API
+     **********************/
     let pollTimer = null;
+    let smoothTimer = null;
+
+    let curProgress = 0;
+    let curDuration = 0;
+    let lastSync = 0;
+
+    function stopSmooth(){
+      if (smoothTimer) clearInterval(smoothTimer);
+      smoothTimer = null;
+    }
+
+    function startSmooth(){
+      stopSmooth();
+      smoothTimer = setInterval(() => {
+        if (!wrap.classList.contains("visible")) return;
+        if (!curDuration) return;
+
+        const now = Date.now();
+        const delta = now - lastSync;
+        const progress = Math.min(curDuration, curProgress + delta);
+
+        tLeft.textContent = formatTime(progress);
+        const pct = Math.max(0, Math.min(1, progress / curDuration));
+        barFill.style.width = (pct * 100).toFixed(2) + "%";
+
+      }, 250);
+    }
+
     async function startPolling(){
       if (pollTimer) clearInterval(pollTimer);
 
       async function tick(){
         const token = await ensureToken();
 
-        // brak tokena -> AUTO CONNECT (czyli redirect do logowania)
         if (!token){
-          // żeby nie robić pętli redirectów (np. gdy streamlabs blokuje popup),
-          // ustawiamy mały “bezpiecznik”:
+          // auto-connect (1 raz na sesję) żeby nie zrobić redirect loop
           const tried = sessionStorage.getItem("sp_tried_login");
           if (!tried){
             sessionStorage.setItem("sp_tried_login","1");
-            setIdle("Loguję do Spotify…", "Jeśli to 1. raz: zaakceptuj zgodę");
+            setIdle();
             await startLoginAuto();
             return;
           } else {
-            // jak już próbowaliśmy w tej sesji i nie poszło, pokaż sensowny tekst
-            setIdle("Brak autoryzacji", "Otwórz overlay w przeglądarce i zaloguj");
+            setIdle();
             return;
           }
         }
 
-        pill.textContent = "ON";
         const result = await spotifyCurrentlyPlaying(token);
 
         if (result.unauthorized){
           const refreshed = await refreshAccessToken();
           if (!refreshed){
             clearTokens();
-            setIdle("Sesja wygasła", "Odśwież overlay / zaloguj ponownie");
+            setIdle();
           }
           return;
         }
 
         if (result.isPlaying){
+          // zsynchronizuj smooth timer
+          curProgress = result.progressMs;
+          curDuration = result.durationMs;
+          lastSync = Date.now();
           setPlaying(result);
+          startSmooth();
         } else {
-          setIdle("Nic nie gra", "albo masz pauzę");
+          stopSmooth();
+          setIdle();
         }
       }
 
@@ -485,7 +559,8 @@
     }
 
     (async function init(){
-      setIdle("Spotify", "Łączenie…");
+      // start: schowane
+      setIdle();
       resizeCardToText();
       await handleCallbackIfNeeded();
       await startPolling();
@@ -493,5 +568,3 @@
   </script>
 </body>
 </html>
-
-
