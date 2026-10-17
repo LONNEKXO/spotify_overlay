@@ -3,201 +3,30 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Spotify Now Playing Overlay</title>
+  <title>LONNEKXO — Spotify Now Playing</title>
   <style>
-    *,*::before,*::after{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      background: transparent;
-      overflow:hidden;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:#e9ecff;
-    }
 
-    :root{
-      --card-bg: rgba(25,25,25,.7);
-      --stroke: rgba(255,255,255,.08);
-      --radius: 22px;
-    }
-
-    /* pozycja overlay */
-    .wrap{
-      position:fixed;
-      left:42px;
-      bottom:42px;
-      z-index:10;
-      transition: opacity .35s ease, transform .35s ease;
-      opacity: 0;
-      transform: translateY(10px) scale(.98);
-      pointer-events:none;
-    }
-    .wrap.visible{
-      opacity:1;
-      transform: translateY(0) scale(1);
-      pointer-events:auto;
-    }
-
-    .card{
-      display:inline-flex;
-      align-items:center;
-      gap:12px;
-      padding:10px 14px;
-      border-radius:999px;
-      background: var(--card-bg);
-      backdrop-filter: blur(12px);
-      border:1px solid var(--stroke);
-      box-shadow:
-        0 15px 50px rgba(255,255,255,.2),
-        0 0 100px rgba(255,255,255,.12);
-      position:relative;
-      overflow:hidden;
-      transform: translateZ(0);
-      will-change: width;
-      transition: width .22s ease, transform .22s ease, opacity .22s ease;
-    }
-
-    .card::before{
-      content:"";
-      position:absolute; inset:-1px;
-      background:
-        radial-gradient(260px 160px at 0% 0%, rgba(255,255,255,.25), transparent 60%),
-        radial-gradient(260px 160px at 100% 100%, rgba(255,255,255,.18), transparent 60%);
-      pointer-events:none;
-      opacity:.9;
-    }
-
-    /* okładka */
-    .cover{
-      width:54px; height:54px;
-      border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      overflow:hidden;
-      flex:0 0 auto;
-      position:relative;
-      z-index:1;
-      background: rgba(255,255,255,.06);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-    }
-    .cover img{
-      width:100%; height:100%;
-      object-fit:cover;
-      display:block;
-    }
-
-    /* kręcąca się płyta */
-    .vinyl{
-      width:54px; height:54px;
-      flex:0 0 auto;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      position:relative;
-      z-index:1;
-      background:
-        radial-gradient(circle at 50% 50%,
-          rgba(255,255,255,.65) 0 2px,
-          rgba(0,0,0,.0) 2px 7px,
-          rgba(255,255,255,.16) 7px 8px,
-          rgba(0,0,0,.0) 8px 12px,
-          rgba(255,255,255,.14) 12px 13px,
-          rgba(0,0,0,.0) 13px 18px,
-          rgba(255,255,255,.10) 18px 19px,
-          rgba(0,0,0,.0) 19px 100%
-        ),
-        radial-gradient(circle at 30% 30%, rgba(255,255,255,.10), transparent 55%),
-        radial-gradient(circle at 70% 70%, rgba(255,255,255,.08), transparent 55%),
-        rgba(0,0,0,.28);
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-      transform-origin: 50% 50%;
-    }
-    .vinyl::after{
-      content:"";
-      position:absolute; inset:6px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.08);
-      opacity:.8;
-    }
-    .spin{ animation: spin 2.2s linear infinite; }
-    @keyframes spin{ to{ transform: rotate(360deg); } }
-
-    .meta{
-      min-width:0;
-      display:flex;
-      flex-direction:column;
-      gap:4px;
-      z-index:1;
-      position:relative;
-    }
-
-    /* karta rośnie, a dopiero przy max szerokości okna łapie ellipsis */
-    .artist{
-      font-size:13px;
-      font-weight:900;
-      letter-spacing:.08em;
-      text-transform:uppercase;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      text-shadow:0 0 14px rgba(255,255,255,.25);
-    }
-    .track{
-      font-size:12px;
-      font-weight:800;
-      letter-spacing:.06em;
-      text-transform:uppercase;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      color:#ffffff;
-      text-shadow:0 0 14px rgba(255,255,255,.20);
-    }
-
-    /* progress row */
-    .progressRow{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      margin-top:2px;
-    }
-
-    .time{
-      font-size:11px;
-      font-weight:800;
-      letter-spacing:.08em;
-      opacity:.78;
-      color:rgba(255,255,255,.75);
-      width:48px;
-      text-align:center;
-      flex:0 0 auto;
-      user-select:none;
-    }
-
-    .bar{
-      position:relative;
-      height:8px;
-      flex:1 1 auto;
-      min-width:120px;
-      border-radius:999px;
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.06);
-      box-shadow: inset 0 0 18px rgba(0,0,0,.35);
-    }
-
-    .barFill{
-      height:100%;
-      width:0%;
-      border-radius:999px;
-      background: linear-gradient(90deg, rgba(255,255,255,.95), rgba(255,255,255,.72));
-      box-shadow: 0 0 18px rgba(255,255,255,.25);
-      transition: width .15s linear;
-    }
-
-    /* responsive */
-    @media (max-width:780px){
-      .wrap{ left:18px; bottom:18px; }
-      .card{ border-radius:22px; }
-    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body { background: transparent; overflow: hidden; font-family: Inter, 'Segoe UI', Arial, sans-serif; color: #f5f5f5; }
+    :root { --panel: rgba(10,11,13,.91); --stroke: rgba(255,255,255,.16); --muted: #989ba0; }
+    .wrap { position: fixed; left: 42px; bottom: 42px; z-index: 10; opacity: 0; transform: translateY(12px); transition: opacity .42s ease, transform .42s cubic-bezier(.2,.7,.2,1); pointer-events: none; }
+    .wrap.visible { opacity: 1; transform: translateY(0); }
+    .card { display: flex; align-items: center; gap: 16px; position: relative; isolation: isolate; overflow: hidden; padding: 13px 18px 13px 13px; min-height: 86px; border: 1px solid var(--stroke); border-radius: 16px; background: var(--panel); box-shadow: 0 16px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.045); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); transition: width .32s cubic-bezier(.2,.7,.2,1); }
+    .card::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(ellipse at 15% 0%, rgba(255,255,255,.055), transparent 62%); }
+    .card::after { content: ''; position: absolute; top: 0; left: 16px; width: 54px; height: 1px; background: rgba(255,255,255,.68); box-shadow: 0 0 14px rgba(255,255,255,.28); }
+    .vinyl { display: none; }
+    .cover { width: 58px; height: 58px; flex: 0 0 58px; position: relative; overflow: hidden; border-radius: 9px; border: 1px solid rgba(255,255,255,.13); background: #191a1c; box-shadow: 0 5px 16px rgba(0,0,0,.35); }
+    .cover img { display: block; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.08); }
+    .meta { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 5px; min-width: 0; flex: 1; }
+    .artist { font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track { font-size: 15px; line-height: 1.25; font-weight: 750; letter-spacing: .025em; color: #f5f5f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .progressRow { display: flex; align-items: center; gap: 9px; margin-top: 4px; }
+    .time { flex: 0 0 32px; width: 32px; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .015em; color: #a3a5a8; text-align: center; user-select: none; }
+    .bar { position: relative; flex: 1 1 auto; min-width: 110px; height: 3px; overflow: hidden; border-radius: 3px; background: rgba(255,255,255,.16); }
+    .barFill { width: 0%; height: 100%; border-radius: 3px; background: #e6e7e9; box-shadow: 0 0 9px rgba(255,255,255,.2); transition: width .2s linear; }
+    @media (max-width: 780px) { .wrap { left: 18px; bottom: 18px; } .card { padding: 10px 13px 10px 10px; gap: 12px; } .cover { width: 48px; height: 48px; flex-basis: 48px; } }
+    @media (prefers-reduced-motion: reduce) { .wrap, .card, .barFill { transition: none; } }
   </style>
 </head>
 
@@ -311,14 +140,14 @@
       const textW = Math.max(wA, wT);
 
       // fixed: vinyl + cover + padding + gaps + progress row (czas + czas + minimalny bar)
-      const fixedLeft = 54 + 54 + 14*2 + 12*3; // vin + cover + padding + gaps
-      const progressMin = 48 + 10 + 120 + 10 + 48; // left time + gap + min bar + gap + right time
+      const fixedLeft = 58 + 13 + 18 + 16; // vin + cover + padding + gaps
+      const progressMin = 32 + 9 + 110 + 9 + 32; // left time + gap + min bar + gap + right time
       const target = fixedLeft + Math.max(textW, progressMin);
 
-      const minW = 420;
-      const maxW = Math.min(window.innerWidth - 60, 1200); // rośnie szerzej niż wcześniej
+      const minW = 360;
+      const maxW = Math.max(240, Math.min(window.innerWidth - 60, 720)); // rośnie szerzej niż wcześniej
 
-      const finalW = Math.max(minW, Math.min(maxW, Math.round(target)));
+      const finalW = Math.min(maxW, Math.max(Math.min(minW, maxW), Math.round(target)));
       card.style.width = finalW + "px";
     }
 
